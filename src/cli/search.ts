@@ -1,0 +1,29 @@
+import { Command } from "commander";
+import { closeDb } from "../db/connection.js";
+import { search } from "../memory/search.js";
+import type { MemoryLayer, SearchOptions } from "../memory/types.js";
+
+export const searchCommand = new Command("search")
+  .description("Search memories (BM25 + vector hybrid)")
+  .argument("<query>", "Search query")
+  .option("--layer <layer>", "Filter by layer (episodic/semantic/rules)")
+  .option("--mode <mode>", "Search mode (bm25/vector/hybrid)", "hybrid")
+  .option("--limit <n>", "Max results", parseInt)
+  .action(async (query: string, opts) => {
+    const options: SearchOptions = {
+      layer: opts.layer as MemoryLayer | undefined,
+      mode: opts.mode,
+      limit: opts.limit ?? 10,
+    };
+
+    try {
+      const results = await search(query, options);
+      if (results.length === 0) {
+        console.log("No results found.");
+        return;
+      }
+      console.log(JSON.stringify(results, null, 2));
+    } finally {
+      closeDb();
+    }
+  });

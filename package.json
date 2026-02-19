@@ -1,0 +1,30 @@
+{
+  "name": "mem-x",
+  "version": "0.1.0",
+  "description": "Self-evolving AI long-term memory system",
+  "type": "module",
+  "bin": {
+    "mem-x": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "mem-x": "node --loader ts-node/esm src/cli.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11",
+    "commander": "^13",
+    "openai": "^4",
+    "sqlite-vec": "^0.1",
+    "uuid": "^11"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7",
+    "@types/node": "^22",
+    "@types/uuid": "^10",
+    "typescript": "^5"
+  }
+}

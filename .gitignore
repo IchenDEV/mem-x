@@ -1,0 +1,4 @@
+node_modules/
+dist/
+data/mem-x.db
+mem-x.config.json
