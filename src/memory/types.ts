@@ -1,4 +1,27 @@
-export type MemoryLayer = "episodic" | "semantic" | "rules";
+export type MemoryLayer = "episodic" | "semantic" | "rules" | "short_term";
+
+export type LongTermLayer = "episodic" | "semantic" | "rules";
+
+/** Search priority order: rules > short_term > semantic > episodic */
+export const SEARCH_LAYERS: MemoryLayer[] = ["rules", "short_term", "semantic", "episodic"];
+
+export const ALL_LAYERS: MemoryLayer[] = ["short_term", "episodic", "semantic", "rules"];
+
+export const RRF_K = 60;
+
+export interface ShortTermMemory {
+  id: string;
+  content: string;
+  source_session: string | null;
+  tags: string[];
+  confidence: number;
+  hit_count: number;
+  last_hit_at: string | null;
+  created_at_round: number;
+  expires_at_round: number;
+  promoted: boolean;
+  created_at: string;
+}
 
 export interface EpisodicMemory {
   id: string;
@@ -55,11 +78,27 @@ export interface Task {
   updated_at: string;
 }
 
+export interface SessionEntry {
+  id: string;
+  content: string;
+  tags: string[];
+  timestamp: string;
+}
+
+export interface SessionData {
+  id: string;
+  started_at: string;
+  ended_at: string | null;
+  entries: SessionEntry[];
+}
+
+export type AnyMemory = ShortTermMemory | EpisodicMemory | SemanticMemory | RuleMemory;
+
 export interface SearchResult {
   id: string;
   layer: MemoryLayer;
   score: number;
-  data: EpisodicMemory | SemanticMemory | RuleMemory;
+  data: AnyMemory;
 }
 
 export interface SearchOptions {

@@ -1,10 +1,5 @@
 import type { EmbeddingProvider } from "./provider.js";
-
-const DIMENSIONS: Record<string, number> = {
-  "nomic-embed-text": 768,
-  "all-minilm": 384,
-  "mxbai-embed-large": 1024,
-};
+import { MODEL_DIMENSIONS } from "./provider.js";
 
 interface OllamaEmbedResponse {
   embeddings: number[][];
@@ -14,7 +9,7 @@ export function createOllamaProvider(
   model = "nomic-embed-text",
   baseUrl = "http://localhost:11434",
 ): EmbeddingProvider {
-  const dimensions = DIMENSIONS[model] ?? 768;
+  const dimensions = MODEL_DIMENSIONS[model] ?? 768;
 
   async function callOllama(texts: string[]): Promise<Float32Array[]> {
     const res = await fetch(`${baseUrl}/api/embed`, {

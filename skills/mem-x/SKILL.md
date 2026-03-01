@@ -1,221 +1,334 @@
-# mem-x: Self-Evolving AI Long-Term Memory System
+---
+name: mem-x
+description: Self-evolving AI memory system. Use on EVERY user message to recall context, capture insights, and evolve behavior. Provides `mem-x recall` for instant context bootstrap and `mem-x search` for targeted retrieval across episodic, semantic, rule, and short-term memory layers. Use when the user mentions mem-x, memory, remember, recall, evolve, review, reflect, or knowledge management. Use also when starting any conversation, when the user teaches something, corrects you, assigns a task, or states a preference.
+---
 
-Use this skill when you need to persist knowledge across conversations, recall past interactions, capture tasks, or improve your own behavior over time. This skill turns any AI assistant into a learning system with accurate, evolving long-term memory.
+# mem-x
 
-## Prerequisites
+## Agent Identity
 
-- The `mem-x` CLI must be installed and built: `cd <mem-x-root> && npm install && npm run build`
-- Database must be initialized: `npx mem-x init`
-- Embedding API key must be configured: `npx mem-x config set embedding.apiKey <key>`
+Set a unique bucket name for isolation. Every command below inherits this scope.
+
+```bash
+export MEM_X_BUCKET=<agent-name>
+# or prepend: mem-x --bucket <name> <command>
+```
+
+Use a stable, lowercase identifier — typically the project name or a constant like `claude-code`. Pick once and reuse it across all sessions for this agent so memories accumulate correctly.
 
 ---
 
-## 1. System Overview
+## Core Loop
 
-### Core Concept
+Execute these four rules on **every conversation**, in order.
 
-mem-x gives you three layers of persistent memory, ordered by priority:
+### Rule 1 — Recall (first message)
 
-1. **Rules** (highest priority): Explicit behavioral constraints you must follow. Always check rules first.
-2. **Semantic Memory**: Distilled knowledge and patterns — your long-term knowledge base.
-3. **Episodic Memory**: Raw interaction records — specific events, conversations, task outcomes.
+On the **first user message**, immediately bootstrap context before responding:
 
-These layers form a lifecycle: episodic events accumulate → patterns get distilled into semantic knowledge → validated patterns become rules. An evolution engine drives this process.
-
-### CLI Quick Reference
-
-All memory operations go through the `mem-x` CLI. Run commands using `npx mem-x <command>` from the project root.
-
-```
-# Initialize
-mem-x init
-
-# Memory CRUD
-mem-x memory add episodic --event "..." [--context "..."] [--result "..."] [--tags "a,b"]
-mem-x memory add semantic --topic "..." --content "..." [--tags "a,b"]
-mem-x memory add rules --trigger "..." --constraint "..." [--reason "..."]
-mem-x memory list <layer> [--since YYYY-MM-DD] [--limit N]
-mem-x memory get <id> --layer <layer>
-mem-x memory delete <id> --layer <layer>
-
-# Search (dual-path: BM25 + vector)
-mem-x search "<query>" [--layer <layer>] [--mode bm25|vector|hybrid] [--limit N]
-
-# Tasks
-mem-x task add --title "..." [--deadline "..."] [--priority low|medium|high|urgent]
-mem-x task list [--status pending|in_progress|done|cancelled]
-mem-x task update <id> --status <status>
-
-# Config
-mem-x config show
-mem-x config set <key> <value>
+```bash
+mem-x recall
 ```
 
-### Search Priority
+This outputs all active rules, pending tasks, and recent memories in one dump. Read and internalize everything.
 
-When you need to recall information, search in this order:
+Then search for topic-specific context based on the user's message:
 
-1. **Rules first** — `mem-x search "<query>" --layer rules` — These are constraints you must follow.
-2. **Semantic next** — `mem-x search "<query>" --layer semantic` — General knowledge and patterns.
-3. **Episodic last** — `mem-x search "<query>" --layer episodic` — Specific past events.
+```bash
+mem-x search "<keywords from user's first message>"
+```
 
-Or search all layers at once: `mem-x search "<query>"` (results are ranked by relevance across layers).
+**Apply all recalled rules immediately.** Note pending tasks. Use memories as context for your response.
+
+If the conversation continues across multiple topics, search again as needed:
+
+```bash
+mem-x search "<new topic>"
+```
+
+### Rule 2 — Start Session (first message)
+
+Start a session to track this conversation:
+
+```bash
+mem-x session start
+# → Session started: <session-id>
+```
+
+Keep the session ID for all subsequent captures in this conversation.
+
+### Rule 3 — Capture (every message)
+
+On **every user message**, evaluate: did the user say something worth remembering?
+
+| Signal | Action |
+|--------|--------|
+| User teaches a fact | `mem-x session add <id> --content "..." --tags "fact"` |
+| User states a preference | `mem-x session add <id> --content "..." --tags "preference"` |
+| User corrects you | `mem-x session add <id> --content "..." --tags "correction"` |
+| Task completed with outcome | `mem-x session add <id> --content "..." --tags "outcome"` |
+| User assigns a task | `mem-x task add --title "..." --priority <p>` |
+| User says "always" / "never" | `mem-x memory add rules --trigger "..." --constraint "..." --reason "..."` |
+| Pattern confirmed across 3+ sessions (visible in recall output) | `mem-x memory add semantic --topic "..." --content "..." --tags "..."` |
+
+**Before every write**, check for conflicts:
+
+```bash
+mem-x search "<summary of new info>" --layer <target> --limit 5
+```
+
+- Duplicate found → skip
+- Updated info → write new, note it supersedes old
+- Contradiction → write new with correction context
+
+**Skip**: greetings, trivial chat, temporary debug steps, information already captured.
+
+### Rule 4 — Commit (conversation end)
+
+When the conversation is clearly wrapping up — user says goodbye, the task is done, or the topic closes naturally. If unsure, commit anyway; it is safe to run multiple times.
+
+```bash
+mem-x session end <session-id>
+mem-x memory purge
+```
+
+This commits all session entries to short-term memory (TTL 7 rounds), increments the round counter, and cleans expired entries.
 
 ---
 
-## 2. Memory Management
-
-### When to Write Episodic Memory
-
-Write an episodic memory (`mem-x memory add episodic`) when:
-
-- The user shares a fact, preference, or decision that may be useful later
-- A task is completed (record what was done and the outcome)
-- An error occurs and is resolved (record the problem and solution)
-- The user corrects your behavior (record the correction)
-
-Example:
-```bash
-mem-x memory add episodic \
-  --event "User prefers functional programming style over classes in TypeScript" \
-  --context "code-review" \
-  --tags "preference,typescript,coding-style"
-```
-
-### When to Write Semantic Memory
-
-Write semantic memory (`mem-x memory add semantic`) when:
-
-- You notice a pattern across multiple episodic memories (e.g., user always prefers X over Y)
-- You distill a general principle from specific experiences
-- You learn a reusable piece of knowledge
-
-Example:
-```bash
-mem-x memory add semantic \
-  --topic "User coding preferences" \
-  --content "Prefers functional programming. Files should be under 300 lines. Uses TypeScript with ESM modules." \
-  --tags "preference,coding-style"
-```
-
-### When to Write Rules
-
-Write a rule (`mem-x memory add rules`) when:
-
-- A behavioral constraint has been clearly established and validated
-- The user explicitly states "always do X" or "never do Y"
-- A pattern has been confirmed multiple times and should be enforced
-
-Example:
-```bash
-mem-x memory add rules \
-  --trigger "When writing TypeScript code" \
-  --constraint "Use functional programming style. Avoid classes. Keep files under 300 lines." \
-  --reason "User's explicit coding style preference, confirmed across multiple sessions"
-```
-
-### Conflict Detection
-
-Before writing a new memory, search for similar existing memories:
-
-```bash
-mem-x search "<summary of new memory>" --layer <target-layer> --limit 5
-```
-
-If a result is highly similar:
-- **Same information**: Skip writing (avoid duplicates)
-- **Updated information**: Write new memory, note that it supersedes the old one
-- **Contradictory**: Write the new memory with the correction context, and flag the old memory for review during evolution
-
----
-
-## 3. Knowledge Capture
-
-During every conversation, actively identify information worth remembering:
-
-### What to Capture
-
-| Signal | Action | Example |
-|--------|--------|---------|
-| User teaches a fact | Write episodic | "Our API uses JWT tokens with 1h expiry" |
-| User states preference | Write episodic | "I prefer Tailwind over CSS modules" |
-| User corrects you | Write episodic (record correction) | "No, we use PostgreSQL not MySQL" |
-| Task completed | Write episodic (record outcome) | "Migrated auth from session to JWT" |
-| User assigns task | Create task | "Fix the login bug by Friday" |
-| User says "always/never" | Write rule directly | "Always use named exports" |
-
-### What NOT to Capture
-
-- Trivial small talk or greetings
-- Temporary debugging steps that won't be useful later
-- Information already well-captured in existing memories
-- Extremely context-specific details with no reuse value
-
-### Handling Corrections
-
-When the user corrects you:
-
-1. Search for the incorrect memory: `mem-x search "<incorrect belief>" --limit 5`
-2. Note which memory was wrong (by ID)
-3. Write a new episodic memory recording the correction, referencing the old memory
-4. The evolution engine will handle adjusting confidence scores
-
----
-
-## 4. Evolution Engine
-
-The evolution engine is what makes mem-x a *self-evolving* system rather than a simple database. It runs an 8-step workflow to continuously improve memory quality.
-
-### Eight-Step Workflow
-
-```
-Commit → Review → Why → Solution → Update → Check → Log → Distill
-```
-
-**Step 1 — Commit**: Record the current session's key information as episodic memory.
-```bash
-mem-x memory add episodic --event "<session summary>" --context "<project>" --tags "session"
-```
-
-**Step 2 — Review**: Search recent episodic memories for patterns.
-```bash
-mem-x search "recent patterns" --layer episodic --limit 20
-```
-Look for: recurring topics, repeated mistakes, consistent preferences, knowledge gaps.
-
-**Step 3 — Why**: Analyze the patterns. Ask: Why did certain approaches work or fail? What underlying principle explains the pattern?
-
-**Step 4 — Solution**: Design improvements:
-- New semantic memory to capture a discovered pattern
-- New rule to enforce a validated behavior
-- Updates to existing memories (corrections, confidence adjustments)
-
-**Step 5 — Update**: Execute the improvements via CLI commands.
-
-**Step 6 — Check**: Verify the updates don't conflict with existing high-confidence memories:
-```bash
-mem-x search "<new knowledge summary>" --layer semantic --limit 5
-mem-x search "<new knowledge summary>" --layer rules --limit 5
-```
-
-**Step 7 — Log**: Record what was done in this evolution cycle (for future meta-analysis).
-
-**Step 8 — Distill**: If multiple evolution cycles have accumulated, look for meta-patterns and distill higher-level knowledge.
+## Evolution Workflow
 
 ### When to Trigger
 
-| Trigger | What to Run |
-|---------|-------------|
-| End of every conversation | At minimum: Step 1 (Commit) |
-| User asks to "evolve" / "review" / "reflect" | Full 8-step workflow |
-| Memory conflict detected | Steps 2-6 (Review through Check) |
-| Accumulated 5+ sessions without evolution | Full 8-step workflow |
+| Condition | Action |
+|-----------|--------|
+| User says "evolve" / "review" / "reflect" / "复盘" | Run full 8-step workflow |
+| 5+ sessions accumulated since last evolution | Run full 8-step workflow |
+| Memory conflict detected during capture | Run Steps 2–6 |
 
-### Memory Quality Maintenance
+### Step 1 — Commit
 
-During evolution, look for:
+End the current session if active:
 
-- **Stale memories**: Semantic memories that haven't been hit recently → mark status as "stale"
-- **Low-confidence memories**: Episodic memories that were corrected → already have lower confidence
-- **Redundant episodics**: Multiple episodic memories saying the same thing → distill into one semantic memory
-- **Unverified rules**: Rules that haven't been tested → flag for verification next time the trigger condition occurs
+```bash
+mem-x session end <session-id>
+```
+
+### Step 2 — Review
+
+Gather all recent material:
+
+```bash
+mem-x recall --limit 30
+mem-x memory list short_term --limit 30
+```
+
+Scan for: recurring topics, repeated mistakes, consistent preferences, knowledge gaps.
+
+### Step 3 — Analyze
+
+Write your analysis as a session entry (start a new session for the evolution process):
+
+```bash
+mem-x session start
+# → Session started: <evo-session-id>
+
+mem-x session add <evo-session-id> \
+  --content "Analysis: user consistently prefers X over Y because Z. Pattern P appeared in 3 sessions." \
+  --tags "evolution,analysis"
+```
+
+### Step 4 — Plan Promotions
+
+Decide what to promote, discard, or consolidate. Record the plan:
+
+```bash
+mem-x session add <evo-session-id> \
+  --content "Plan: promote 'prefer X over Y' → semantic; promote 'always use X' → rule; discard stale items A, B" \
+  --tags "evolution,plan"
+```
+
+### Step 5 — Execute
+
+Execute each promotion:
+
+```bash
+# Promote to semantic
+mem-x memory add semantic \
+  --topic "<knowledge topic>" \
+  --content "<consolidated knowledge>" \
+  --tags "promoted"
+
+# Promote to rules
+mem-x memory add rules \
+  --trigger "<when this applies>" \
+  --constraint "<what to do>" \
+  --reason "<why, based on analysis>"
+
+# Promote to episodic
+mem-x memory add episodic \
+  --event "<significant event>" \
+  --context "<context>" \
+  --result "<outcome>" \
+  --tags "promoted"
+```
+
+### Step 6 — Verify
+
+Check that new memories don't conflict with existing ones:
+
+```bash
+mem-x search "<new knowledge summary>" --layer rules --limit 5
+mem-x search "<new knowledge summary>" --layer semantic --limit 5
+```
+
+If conflicts found: update or delete the conflicting entry, then re-verify.
+
+### Step 7 — Log
+
+Record this evolution cycle as an episodic event:
+
+```bash
+mem-x memory add episodic \
+  --event "Evolution cycle: promoted N short-term → M semantic, K rules" \
+  --context "evolution-cycle" \
+  --result "<summary: what was promoted, what was discarded, what was updated>" \
+  --tags "evolution"
+```
+
+### Step 8 — Distill
+
+Search past evolution logs for meta-patterns:
+
+```bash
+mem-x search "evolution" --layer episodic --limit 20
+```
+
+If a recurring pattern emerges across evolution cycles (e.g., "user always rejects class-based code"), write a meta-rule:
+
+```bash
+mem-x memory add rules \
+  --trigger "<meta-pattern trigger>" \
+  --constraint "<distilled constraint>" \
+  --reason "Meta-pattern observed across N evolution cycles"
+```
+
+End the evolution session:
+
+```bash
+mem-x session end <evo-session-id>
+```
+
+---
+
+## Maintenance
+
+### After Every Conversation (mandatory — part of Rule 4)
+
+```bash
+mem-x memory purge
+```
+
+### During Every Evolution (part of Step 2)
+
+While reviewing, also inspect for:
+
+**Stale semantic memories** — no hits in 30+ days:
+
+```bash
+mem-x memory list semantic --limit 50
+```
+
+Entries with `hit_count: 0` or very old `last_hit_at` → delete or update.
+
+**Redundant short-term entries** — multiple entries about the same topic:
+
+→ Consolidate into one semantic memory in Step 5, originals expire naturally.
+
+**Unverified rules** — rules with `hit_count: 0`:
+
+```bash
+mem-x memory list rules --limit 50
+```
+
+→ Next time their trigger fires, actively test. If still valid, keep. If not, delete:
+
+```bash
+mem-x memory delete <id> --layer rules
+```
+
+### Weekly Check (when 5+ sessions since last evolution)
+
+Run the full 8-step evolution workflow. Find the last evolution timestamp:
+
+```bash
+mem-x search "evolution-cycle" --layer episodic --limit 1
+mem-x session list --limit 10
+```
+
+Count sessions created after the last evolution episodic entry. If 5+, trigger evolution.
+
+---
+
+## CLI Reference
+
+```
+# Context bootstrap
+mem-x recall [--limit N]                                 # Dump all rules, tasks, recent memories
+
+# Session (Tier 1 — ephemeral)
+mem-x session start                                      # Start session → returns <session-id>
+mem-x session add <id> --content "..." [--tags "a,b"]    # Add entry to session
+mem-x session end <id> [--ttl <rounds>]                   # End → commit to short-term + round++
+mem-x session show <id>                                  # View session details
+mem-x session list [--limit N]                           # List recent sessions
+
+# Memory CRUD (Tier 2 & 3)
+mem-x memory add short_term --content "..." [--ttl <rounds>] [--tags "..."]
+mem-x memory add episodic --event "..." [--context C] [--result R] [--tags "..."]
+mem-x memory add semantic --topic "..." --content "..." [--tags "..."]
+mem-x memory add rules --trigger "..." --constraint "..." [--reason "..."]
+mem-x memory list <layer> [--since DATE] [--limit N]
+mem-x memory get <id> --layer <layer>
+mem-x memory delete <id> --layer <layer>
+mem-x memory purge                                       # Clean expired short-term
+
+# Search (BM25 + vector hybrid)
+mem-x search "<query>" [--layer L] [--mode bm25|vector|hybrid] [--limit N]
+
+# Tasks
+mem-x task add --title "..." [--priority P] [--deadline D] [--tags "..."]
+mem-x task list [--status S] [--limit N]
+mem-x task update <id> --status <status>
+
+# Config & Debug
+mem-x config show
+mem-x config set <key> <value>
+mem-x debug [--port 3210]                                # Launch web debug dashboard
+
+# Global: mem-x --bucket <name> <command>  or  MEM_X_BUCKET=<name>
+```
+
+---
+
+## Architecture Reference
+
+```
+Session Memory ──[session end]──▶ Short-term ──[evolution]──▶ Long-term
+  (JSON files)                     (TTL 7 rounds)              ├── Episodic (diary)
+  ephemeral                        SQLite + FTS5 + vec0        ├── Semantic (knowledge)
+  per-conversation                 searchable, round-decay     └── Rules (constraints)
+```
+
+| Tier | Layer | Lifespan | Analogy |
+|------|-------|----------|---------|
+| 1 | Session | Single conversation | Scratch paper |
+| 2 | Short-term | 7 rounds (configurable) | Sticky notes |
+| 3 | Episodic | Permanent | Diary |
+| 3 | Semantic | Permanent | Notebook |
+| 3 | Rules | Permanent, highest priority | Rulebook |
+
+- **Search priority**: Rules → Short-term → Semantic → Episodic
+- **Search modes**: BM25 (keyword) + vector (semantic) → fused via Reciprocal Rank Fusion
+- **Storage**: SQLite with FTS5 full-text index + sqlite-vec vector extension
+- **Bucket isolation**: Each agent gets `~/.mem-x/<bucket>/` with own DB + sessions

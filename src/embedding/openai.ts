@@ -1,14 +1,6 @@
 import OpenAI from "openai";
 import type { EmbeddingProvider } from "./provider.js";
-
-const DIMENSIONS: Record<string, number> = {
-  "text-embedding-3-small": 1536,
-  "text-embedding-3-large": 3072,
-  "text-embedding-ada-002": 1536,
-  "bge-m3": 1024,
-  "BAAI/bge-m3": 1024,
-  "text-embedding-bge-m3": 1024,
-};
+import { MODEL_DIMENSIONS, DEFAULT_DIMENSIONS } from "./provider.js";
 
 export function createOpenAIProvider(
   apiKey: string,
@@ -20,7 +12,7 @@ export function createOpenAIProvider(
     ...(baseUrl ? { baseURL: baseUrl } : {}),
   });
 
-  const dimensions = DIMENSIONS[model] ?? 1536;
+  const dimensions = MODEL_DIMENSIONS[model] ?? DEFAULT_DIMENSIONS;
 
   return {
     dimensions,

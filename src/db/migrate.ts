@@ -1,22 +1,11 @@
 import { getDb } from "./connection.js";
-import { createSchema } from "./schema.js";
+import { createSchema } from "./schema/index.js";
 import { loadConfig } from "../utils/config.js";
-
-const DIMENSIONS_BY_MODEL: Record<string, number> = {
-  "text-embedding-3-small": 1536,
-  "text-embedding-3-large": 3072,
-  "text-embedding-ada-002": 1536,
-  "nomic-embed-text": 768,
-  "bge-m3": 1024,
-  "BAAI/bge-m3": 1024,
-  "text-embedding-bge-m3": 1024,
-};
-
-const DEFAULT_DIMENSIONS = 1536;
+import { MODEL_DIMENSIONS, DEFAULT_DIMENSIONS } from "../embedding/provider.js";
 
 export function getDimensions(): number {
   const config = loadConfig();
-  return DIMENSIONS_BY_MODEL[config.embedding.model] ?? DEFAULT_DIMENSIONS;
+  return MODEL_DIMENSIONS[config.embedding.model] ?? DEFAULT_DIMENSIONS;
 }
 
 export function initializeDatabase(): void {

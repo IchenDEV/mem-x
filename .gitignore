@@ -1,4 +1,7 @@
 node_modules/
 dist/
 data/mem-x.db
+data/mem-x.db-wal
+data/mem-x.db-shm
+data/sessions/
 mem-x.config.json

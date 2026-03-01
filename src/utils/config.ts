@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 
 export interface MemXConfig {
   embedding: {
@@ -7,9 +8,6 @@ export interface MemXConfig {
     model: string;
     apiKey?: string;
     baseUrl?: string;
-  };
-  db: {
-    path: string;
   };
 }
 
@@ -19,13 +17,14 @@ const DEFAULT_CONFIG: MemXConfig = {
     model: "text-embedding-3-small",
     apiKey: "",
   },
-  db: {
-    path: "data/mem-x.db",
-  },
 };
 
+function getMemXHome(): string {
+  return resolve(homedir(), ".mem-x");
+}
+
 function getConfigPath(): string {
-  return resolve(process.cwd(), "mem-x.config.json");
+  return resolve(getMemXHome(), "config.json");
 }
 
 export function loadConfig(): MemXConfig {
@@ -37,6 +36,8 @@ export function loadConfig(): MemXConfig {
 }
 
 export function saveConfig(config: MemXConfig): void {
+  const dir = getMemXHome();
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2) + "\n");
 }
 

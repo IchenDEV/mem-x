@@ -7,24 +7,34 @@
     "mem-x": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/debug/dashboard.html dist/debug/",
     "dev": "tsc --watch",
-    "mem-x": "node --loader ts-node/esm src/cli.ts"
+    "mem-x": "node --import tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "^11",
-    "commander": "^13",
-    "openai": "^4",
-    "sqlite-vec": "^0.1",
-    "uuid": "^11"
+    "better-sqlite3": "^12",
+    "commander": "^14",
+    "openai": "^6",
+    "sqlite-vec": "^0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7",
-    "@types/node": "^22",
-    "@types/uuid": "^10",
-    "typescript": "^5"
+    "@types/node": "^25",
+    "@vitest/coverage-v8": "^4.0.18",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.1",
+    "tsx": "^4",
+    "typescript": "^5",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^4.0.18"
   }
 }

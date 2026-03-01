@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mem-x Debug Dashboard</title>
+<style>
+:root {
+  --bg-0:#0b0d11; --bg-1:#131620; --bg-2:#1a1e2e; --border:#252a3a;
+  --text-0:#e8eaf0; --text-1:#a0a6b8; --text-2:#6b7280;
+  --accent:#6366f1; --accent-h:#818cf8;
+  --green:#22c55e; --yellow:#eab308; --red:#ef4444;
+  --blue:#3b82f6; --purple:#a855f7; --orange:#f97316; --pink:#ec4899;
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,'Segoe UI',sans-serif;background:var(--bg-0);color:var(--text-0);font-size:14px;line-height:1.5}
+a{color:var(--accent-h);text-decoration:none}
+
+header{background:var(--bg-1);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;backdrop-filter:blur(12px)}
+header h1{font-size:18px;font-weight:600}
+header .subtitle{color:var(--text-2);font-size:13px}
+
+nav{display:flex;gap:2px;padding:8px 24px;background:var(--bg-1);border-bottom:1px solid var(--border)}
+.tab-btn{background:none;border:none;color:var(--text-2);padding:8px 16px;cursor:pointer;border-radius:6px;font-size:13px;font-weight:500;transition:all .15s}
+.tab-btn:hover{color:var(--text-0);background:var(--bg-2)}
+.tab-btn.active{color:var(--accent-h);background:rgba(99,102,241,.12)}
+
+main{padding:24px;max-width:1280px;margin:0 auto}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);padding:16px;border-top:3px solid var(--card-color,var(--accent))}
+.stat-card h3{font-size:13px;color:var(--text-1);font-weight:500;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+.stat-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-item{display:flex;flex-direction:column}
+.stat-label{font-size:11px;color:var(--text-2);text-transform:uppercase}
+.stat-value{font-size:20px;font-weight:700;color:var(--text-0)}
+
+.section-title{font-size:13px;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:24px 0 12px;font-weight:600}
+
+.timeline-list{display:flex;flex-direction:column;gap:8px}
+.tl-item{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s}
+.tl-item:hover{border-color:var(--accent)}
+.tl-summary{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-time{color:var(--text-2);font-size:12px;flex-shrink:0}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:color-mix(in srgb,var(--badge-color) 18%,transparent);color:var(--badge-color);white-space:nowrap}
+
+.layer-tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.layer-tab{background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;transition:all .15s}
+.layer-tab:hover{border-color:var(--text-2)}
+.layer-tab.active{background:rgba(99,102,241,.12);border-color:var(--accent);color:var(--accent-h)}
+
+.mem-card{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.mem-card:hover{border-color:var(--accent)}
+.mem-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mem-id{font-family:monospace;font-size:12px;color:var(--text-2)}
+.mem-summary{color:var(--text-0);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mem-meta{display:flex;gap:12px;font-size:12px;color:var(--text-2);flex-wrap:wrap}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;background:var(--bg-2);color:var(--text-1);margin-left:4px}
+
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+input[type="text"],select{background:var(--bg-2);border:1px solid var(--border);color:var(--text-0);padding:8px 12px;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s}
+input[type="text"]:focus,select:focus{border-color:var(--accent)}
+input[type="text"]{flex:1;min-width:200px}
+select{min-width:120px}
+button.primary{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background .15s}
+button.primary:hover{background:var(--accent-h)}
+button.danger{background:var(--red);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text-1);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .15s}
+button.ghost:hover{border-color:var(--text-2);color:var(--text-0)}
+
+.search-result{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px}
+.score-bar{display:flex;gap:16px;font-size:12px;color:var(--text-2);margin-top:8px}
+.score-item{display:flex;align-items:center;gap:4px}
+.score-dot{width:8px;height:8px;border-radius:50%}
+
+.health-card{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.health-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.health-ok{background:rgba(34,197,94,.12);color:var(--green)}
+.health-warn{background:rgba(234,179,8,.12);color:var(--yellow)}
+.health-name{font-weight:500;font-size:13px}
+.health-details{font-size:12px;color:var(--text-2)}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal{background:var(--bg-1);border:1px solid var(--border);border-radius:12px;width:90%;max-width:640px;max-height:80vh;overflow:auto;padding:24px}
+.modal-head{display:flex;align-items:center;justify-content:between;margin-bottom:16px}
+.modal-head h2{font-size:16px;flex:1}
+.modal-close{background:none;border:none;color:var(--text-2);cursor:pointer;font-size:20px;padding:4px 8px}
+.modal-close:hover{color:var(--text-0)}
+pre.json{background:var(--bg-0);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;line-height:1.6;color:var(--text-1)}
+.modal-actions{display:flex;gap:8px;margin-top:16px}
+
+.empty{text-align:center;padding:48px 24px;color:var(--text-2)}
+.loading{text-align:center;padding:48px 24px;color:var(--text-2)}
+.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:12px 16px;border-radius:var(--radius)}
+.hidden{display:none!important}
+
+.status-bar{display:flex;gap:8px;align-items:center;margin-top:8px}
+.status-dot{width:8px;height:8px;border-radius:50%}
+.status-ok{background:var(--green)}
+.status-miss{background:var(--red)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>mem-x Debug</h1>
+  <span class="subtitle">Memory System Dashboard</span>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="timeline">Timeline</button>
+  <button class="tab-btn" data-tab="browser">Browser</button>
+  <button class="tab-btn" data-tab="search">Search</button>
+  <button class="tab-btn" data-tab="health">Health</button>
+</nav>
+
+<main>
+  <div id="panel-overview" class="tab-panel active"><div class="loading">Loading...</div></div>
+  <div id="panel-timeline" class="tab-panel"></div>
+  <div id="panel-browser" class="tab-panel"></div>
+  <div id="panel-search" class="tab-panel">
+    <div class="toolbar">
+      <input type="text" id="search-input" placeholder="Search query...">
+      <select id="search-mode"><option value="hybrid">Hybrid</option><option value="bm25">BM25</option><option value="vector">Vector</option></select>
+      <select id="search-layer"><option value="">All Layers</option><option value="short_term">Short-term</option><option value="episodic">Episodic</option><option value="semantic">Semantic</option><option value="rules">Rules</option></select>
+      <button class="primary" id="search-btn">Search</button>
+    </div>
+    <div id="search-results"><div class="empty">Enter a query to search</div></div>
+  </div>
+  <div id="panel-health" class="tab-panel"></div>
+</main>
+
+<div id="modal-root" class="modal-overlay hidden" onclick="if(event.target===this)hideModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="modal-title">Inspect</h2><button class="modal-close" onclick="hideModal()">&times;</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+const api=async p=>{const r=await fetch(p);if(!r.ok)throw new Error(await r.text());return r.json()};
+const apiDel=async p=>{const r=await fetch(p,{method:'DELETE'});return r.json()};
+
+const LAYER_COLORS={short_term:'#3b82f6',episodic:'#a855f7',semantic:'#22c55e',rules:'#f97316',tasks:'#eab308',sessions:'#ec4899'};
+function layerBadge(l){return `<span class="badge" style="--badge-color:${LAYER_COLORS[l]||'#6b7280'}">${l}</span>`}
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function truncId(id){return id?id.slice(0,8):''}
+function relTime(iso){
+  if(!iso)return'-';
+  const diff=Date.now()-new Date(iso).getTime();
+  const abs=Math.abs(diff),past=diff>0;
+  const s=Math.floor(abs/1000);
+  if(s<60)return past?s+'s ago':'in '+s+'s';
+  const m=Math.floor(s/60);if(m<60)return past?m+'m ago':'in '+m+'m';
+  const h=Math.floor(m/60);if(h<24)return past?h+'h ago':'in '+h+'h';
+  const dy=Math.floor(h/24);if(dy<30)return past?dy+'d ago':'in '+dy+'d';
+  return new Date(iso).toLocaleDateString()
+}
+
+/* ===== Tabs ===== */
+let currentTab='overview',browserView='short_term';
+
+function switchTab(tab){
+  $$('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  $$('.tab-panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${tab}`));
+  currentTab=tab;
+  if(tab==='overview')loadOverview();
+  else if(tab==='timeline')loadTimeline();
+  else if(tab==='browser')loadBrowser();
+  else if(tab==='health')loadHealth();
+}
+
+/* ===== Overview ===== */
+async function loadOverview(){
+  const el=$('#panel-overview');
+  el.innerHTML='<div class="loading">Loading...</div>';
+  try{
+    const s=await api('/api/stats');
+    let h='<div class="stat-grid">';
+    const cards=[
+      {t:'Short-term',c:LAYER_COLORS.short_term,items:{Total:s.short_term.total,Active:s.short_term.active,Expired:s.short_term.expired,Promoted:s.short_term.promoted}},
+      {t:'Episodic',c:LAYER_COLORS.episodic,items:{Total:s.episodic.total,'Avg Conf.':s.episodic.avg_confidence}},
+      {t:'Semantic',c:LAYER_COLORS.semantic,items:{Total:s.semantic.total,Active:s.semantic.active,Stale:s.semantic.stale,Deprecated:s.semantic.deprecated}},
+      {t:'Rules',c:LAYER_COLORS.rules,items:{Total:s.rules.total,Verified:s.rules.verified,Unverified:s.rules.unverified}},
+      {t:'Tasks',c:LAYER_COLORS.tasks,items:{Total:s.tasks.total,Pending:s.tasks.pending,'In Progress':s.tasks.in_progress,Done:s.tasks.done}},
+      {t:'Sessions',c:LAYER_COLORS.sessions,items:{Total:s.sessions.total,Active:s.sessions.active}},
+    ];
+    for(const card of cards){
+      h+=`<div class="stat-card" style="--card-color:${card.c}"><h3>${card.t}</h3><div class="stat-items">`;
+      for(const[k,v]of Object.entries(card.items))h+=`<div class="stat-item"><span class="stat-label">${k}</span><span class="stat-value">${v}</span></div>`;
+      h+='</div></div>';
+    }
+    h+='</div><div class="section-title">Vector Index</div><div class="stat-grid">';
+    for(const[layer,cnt]of Object.entries(s.vectors)){
+      h+=`<div class="stat-card" style="--card-color:${LAYER_COLORS[layer]||'#6b7280'}"><h3>${layer}</h3><div class="stat-items"><div class="stat-item"><span class="stat-label">Vectors</span><span class="stat-value">${cnt}</span></div></div></div>`;
+    }
+    h+='</div>';
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+
+/* ===== Timeline ===== */
+async function loadTimeline(){
+  const el=$('#panel-timeline');
+  el.innerHTML='<div class="loading">Loading...</div>';
+  try{
+    const entries=await api('/api/timeline?limit=100');
+    if(!entries.length){el.innerHTML='<div class="empty">No entries yet</div>';return}
+    let h='<div class="timeline-list">';
+    for(const e of entries){
+      h+=`<div class="tl-item" onclick="showInspect('${e.layer}','${e.id}')">
+        ${layerBadge(e.layer)}
+        <span class="tl-summary">${esc(e.summary)}</span>
+        <code class="mem-id">${truncId(e.id)}</code>
+        <span class="tl-time">${relTime(e.created_at)}</span>
+      </div>`;
+    }
+    h+='</div>';
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+
+/* ===== Browser ===== */
+async function loadBrowser(view){
+  if(view)browserView=view;
+  const el=$('#panel-browser');
+  const views=['short_term','episodic','semantic','rules','tasks','sessions'];
+  let h='<div class="layer-tabs">';
+  for(const v of views)h+=`<button class="layer-tab${browserView===v?' active':''}" onclick="loadBrowser('${v}')">${v}</button>`;
+  h+='</div><div id="browser-list"><div class="loading">Loading...</div></div>';
+  el.innerHTML=h;
+
+  const listEl=$('#browser-list');
+  try{
+    if(browserView==='sessions'){
+      const sessions=await api('/api/sessions?limit=50');
+      if(!sessions.length){listEl.innerHTML='<div class="empty">No sessions</div>';return}
+      listEl.innerHTML=sessions.map(s=>`
+        <div class="mem-card" onclick="showSession('${s.id}')">
+          <div class="mem-header"><code class="mem-id">${truncId(s.id)}</code><span class="badge" style="--badge-color:${s.ended_at?'#6b7280':'var(--green)'}">${s.ended_at?'ended':'active'}</span></div>
+          <div class="mem-meta"><span>${s.entries.length} entries</span><span>Started: ${relTime(s.started_at)}</span>${s.ended_at?`<span>Ended: ${relTime(s.ended_at)}</span>`:''}</div>
+        </div>`).join('');
+    }else if(browserView==='tasks'){
+      const tasks=await api('/api/tasks?limit=50');
+      if(!tasks.length){listEl.innerHTML='<div class="empty">No tasks</div>';return}
+      listEl.innerHTML=tasks.map(t=>`
+        <div class="mem-card">
+          <div class="mem-header"><code class="mem-id">${truncId(t.id)}</code><span class="badge" style="--badge-color:${t.status==='done'?'var(--green)':t.status==='in_progress'?'var(--yellow)':'var(--text-2)'}">${t.status}</span><span class="badge" style="--badge-color:${t.priority==='urgent'?'var(--red)':t.priority==='high'?'var(--orange)':'var(--text-2)'}">${t.priority}</span></div>
+          <div class="mem-summary">${esc(t.title)}</div>
+          <div class="mem-meta">${t.description?`<span>${esc(t.description)}</span>`:''}${(t.tags||[]).map(tg=>`<span class="tag">${esc(tg)}</span>`).join('')}<span>${relTime(t.created_at)}</span></div>
+        </div>`).join('');
+    }else{
+      const memories=await api(`/api/memories/${browserView}?limit=50`);
+      if(!memories.length){listEl.innerHTML='<div class="empty">No memories in this layer</div>';return}
+      listEl.innerHTML=memories.map(m=>renderMemCard(browserView,m)).join('');
+    }
+  }catch(e){listEl.innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+
+function renderMemCard(layer,m){
+  let summary='',extra='';
+  if(layer==='short_term'){summary=m.content;extra=`Expires at round: ${m.expires_at_round} | Created at round: ${m.created_at_round} | Promoted: ${m.promoted?'Yes':'No'}`}
+  else if(layer==='episodic'){summary=m.event;extra=[m.context&&`Ctx: ${esc(m.context)}`,m.result&&`Result: ${esc(m.result)}`].filter(Boolean).join(' | ')}
+  else if(layer==='semantic'){summary=`${m.topic}: ${m.content}`;extra=`v${m.version} | ${m.status}`}
+  else if(layer==='rules'){summary=`${m.trigger_condition} → ${m.constraint_text}`;extra=m.reason?`Reason: ${esc(m.reason)}`:''}
+  return `<div class="mem-card" onclick="showInspect('${layer}','${m.id}')">
+    <div class="mem-header"><code class="mem-id">${truncId(m.id)}</code>${(m.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+    <div class="mem-summary">${esc(summary)}</div>
+    <div class="mem-meta"><span>Conf: ${m.confidence}</span><span>Hits: ${m.hit_count}</span><span>${relTime(m.created_at)}</span></div>
+    ${extra?`<div class="mem-meta" style="margin-top:4px"><span>${extra}</span></div>`:''}
+  </div>`;
+}
+
+/* ===== Search ===== */
+async function runSearch(){
+  const q=$('#search-input').value.trim();
+  if(!q)return;
+  const mode=$('#search-mode').value;
+  const layer=$('#search-layer').value;
+  const el=$('#search-results');
+  el.innerHTML='<div class="loading">Searching...</div>';
+  try{
+    const url=`/api/search?q=${encodeURIComponent(q)}&mode=${mode}${layer?`&layer=${layer}`:''}&limit=20`;
+    const data=await api(url);
+    if(!data.results.length){el.innerHTML='<div class="empty">No results found</div>';return}
+    let h=`<div class="section-title">${data.results.length} results (BM25: ${data.bm25_raw.length} raw, Vector: ${data.vector_raw.length} raw)</div>`;
+    for(const r of data.results){
+      const summary=r.data.event||r.data.content||r.data.topic||r.data.trigger_condition||'';
+      h+=`<div class="search-result" onclick="showInspect('${r.layer}','${r.id}')" style="cursor:pointer">
+        <div class="mem-header">${layerBadge(r.layer)}<code class="mem-id">${truncId(r.id)}</code></div>
+        <div class="mem-summary">${esc(summary)}</div>
+        <div class="score-bar">
+          <span class="score-item"><span class="score-dot" style="background:var(--yellow)"></span>BM25: ${r.bm25_rank!==null?r.bm25_rank.toFixed(4):'-'}</span>
+          <span class="score-item"><span class="score-dot" style="background:var(--blue)"></span>Vector: ${r.vector_distance!==null?r.vector_distance.toFixed(4):'-'}</span>
+          <span class="score-item"><span class="score-dot" style="background:var(--green)"></span>RRF: ${r.rrf_score.toFixed(6)}</span>
+        </div>
+      </div>`;
+    }
+    el.innerHTML=h;
+  }catch(e){el.innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+
+/* ===== Health ===== */
+async function loadHealth(){
+  const el=$('#panel-health');
+  el.innerHTML='<div class="loading">Running checks...</div>';
+  try{
+    const h=await api('/api/health');
+    let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span class="badge" style="--badge-color:${h.ok?'var(--green)':'var(--yellow)'}">Overall: ${h.ok?'Healthy':'Issues Found'}</span>
+      <button class="ghost" onclick="loadHealth()">Re-check</button>
+    </div>`;
+    for(const c of h.checks){
+      const icon=c.status==='ok'?'✓':'⚠';
+      html+=`<div class="health-card">
+        <div class="health-icon ${c.status==='ok'?'health-ok':'health-warn'}">${icon}</div>
+        <div><div class="health-name">${esc(c.name)}</div><div class="health-details">${esc(c.details)}</div></div>
+      </div>`;
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML=`<div class="error">${esc(e.message)}</div>`}
+}
+
+/* ===== Inspect Modal ===== */
+async function showInspect(layer,id){
+  try{
+    const data=await api(`/api/inspect/${layer}/${id}`);
+    $('#modal-title').textContent=`Inspect: ${layer}`;
+    let h=`<div style="display:flex;gap:8px;margin-bottom:12px">
+      ${layerBadge(layer)}<code class="mem-id" style="font-size:13px">${id}</code>
+    </div>
+    <div class="status-bar" style="margin-bottom:12px">
+      <span class="status-dot ${data.has_vector?'status-ok':'status-miss'}"></span>
+      <span style="font-size:12px;color:var(--text-1)">Vector: ${data.has_vector?'Present':'Missing'}</span>
+    </div>
+    <pre class="json">${esc(JSON.stringify(data.memory,null,2))}</pre>
+    <div class="modal-actions">
+      <button class="ghost" onclick="navigator.clipboard.writeText('${id}')">Copy ID</button>
+      <button class="danger" onclick="deleteMemory('${layer}','${id}')">Delete</button>
+    </div>`;
+    $('#modal-body').innerHTML=h;
+    $('#modal-root').classList.remove('hidden');
+  }catch(e){alert('Failed to inspect: '+e.message)}
+}
+
+async function showSession(id){
+  try{
+    const s=await api(`/api/sessions/${id}`);
+    $('#modal-title').textContent='Session';
+    let h=`<code class="mem-id" style="font-size:13px">${id}</code>
+      <div class="mem-meta" style="margin:8px 0"><span>Started: ${s.started_at}</span><span>Ended: ${s.ended_at||'-'}</span><span>${s.entries.length} entries</span></div>
+      <pre class="json">${esc(JSON.stringify(s.entries,null,2))}</pre>`;
+    $('#modal-body').innerHTML=h;
+    $('#modal-root').classList.remove('hidden');
+  }catch(e){alert('Failed to load session: '+e.message)}
+}
+
+function hideModal(){$('#modal-root').classList.add('hidden')}
+
+async function deleteMemory(layer,id){
+  if(!confirm(`Delete ${id} from ${layer}?`))return;
+  try{
+    await apiDel(`/api/memories/${layer}/${id}`);
+    hideModal();
+    if(currentTab==='browser')loadBrowser();
+    else if(currentTab==='timeline')loadTimeline();
+    else if(currentTab==='overview')loadOverview();
+  }catch(e){alert('Delete failed: '+e.message)}
+}
+
+/* ===== Init ===== */
+$$('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+$('#search-btn').addEventListener('click',runSearch);
+$('#search-input').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')hideModal()});
+loadOverview();
+</script>
+</body>
+</html>
