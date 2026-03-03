@@ -4,7 +4,9 @@ import { listTasks } from "./layers/tasks.js";
 import { listShortTerm } from "./layers/short-term.js";
 import { listSemantic } from "./layers/semantic.js";
 import { listEpisodic } from "./layers/episodic.js";
+import { listEdges } from "../graph/edges.js";
 import type { RuleMemory, Task, ShortTermMemory, SemanticMemory, EpisodicMemory } from "./types.js";
+import type { Edge } from "../graph/types.js";
 
 export interface RecallContext {
   rules: RuleMemory[];
@@ -12,6 +14,7 @@ export interface RecallContext {
   short_term: ShortTermMemory[];
   semantic: SemanticMemory[];
   episodic: EpisodicMemory[];
+  edges: Edge[];
 }
 
 export function recall(limit = 10): RecallContext {
@@ -21,6 +24,7 @@ export function recall(limit = 10): RecallContext {
     short_term: listShortTerm({ limit }),
     semantic: listSemantic({ limit }),
     episodic: listEpisodic({ limit }),
+    edges: listEdges({ limit: limit * 3 }),
   };
 }
 
@@ -78,6 +82,14 @@ export function formatRecall(ctx: RecallContext): string {
     for (const m of ctx.episodic) {
       const result = m.result ? ` → ${m.result}` : "";
       lines.push(`- **${m.event}**${result} (${relTime(m.timestamp)})`);
+    }
+    sections.push(lines.join("\n"));
+  }
+
+  if (ctx.edges.length > 0) {
+    const lines = [`## Graph (${ctx.edges.length} edges)`, ""];
+    for (const e of ctx.edges) {
+      lines.push(`- ${e.source_id.slice(0, 8)}(${e.source_layer}) --[${e.relation}]--> ${e.target_id.slice(0, 8)}(${e.target_layer}) w=${e.weight}`);
     }
     sections.push(lines.join("\n"));
   }

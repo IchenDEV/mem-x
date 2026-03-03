@@ -76,7 +76,7 @@ describe("schema", () => {
         .all() as { name: string }[]
     ).map((t) => t.name);
 
-    for (const t of ["metadata", "short_term", "episodic", "semantic", "rules", "tasks", "evolution_log"]) {
+    for (const t of ["metadata", "short_term", "episodic", "semantic", "rules", "tasks", "evolution_log", "edges"]) {
       expect(tables).toContain(t);
     }
     for (const t of ["short_term_fts", "episodic_fts", "semantic_fts", "rules_fts"]) {

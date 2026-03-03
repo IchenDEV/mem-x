@@ -150,20 +150,30 @@ mem-x session add <evo-session-id> \
 
 ### Step 5 — Execute
 
-Execute each promotion:
+Execute each promotion and create graph edges to track provenance:
 
 ```bash
-# Promote to semantic
+# Promote to semantic (then link back to source)
 mem-x memory add semantic \
   --topic "<knowledge topic>" \
   --content "<consolidated knowledge>" \
   --tags "promoted"
+# → Created: <new-semantic-id>
+
+mem-x graph link <short-term-id> <new-semantic-id> \
+  --relation promoted_from \
+  --source-layer short_term --target-layer semantic
 
 # Promote to rules
 mem-x memory add rules \
   --trigger "<when this applies>" \
   --constraint "<what to do>" \
   --reason "<why, based on analysis>"
+# → Created: <new-rule-id>
+
+mem-x graph link <short-term-id> <new-rule-id> \
+  --relation promoted_from \
+  --source-layer short_term --target-layer rules
 
 # Promote to episodic
 mem-x memory add episodic \
@@ -171,6 +181,11 @@ mem-x memory add episodic \
   --context "<context>" \
   --result "<outcome>" \
   --tags "promoted"
+
+# Link related memories across layers
+mem-x graph link <semantic-id> <episodic-id> \
+  --relation related_to \
+  --source-layer semantic --target-layer episodic
 ```
 
 ### Step 6 — Verify
@@ -180,9 +195,18 @@ Check that new memories don't conflict with existing ones:
 ```bash
 mem-x search "<new knowledge summary>" --layer rules --limit 5
 mem-x search "<new knowledge summary>" --layer semantic --limit 5
+
+# Also check graph neighbors for conflicts
+mem-x graph neighbors <new-id> --relation contradicts
 ```
 
-If conflicts found: update or delete the conflicting entry, then re-verify.
+If conflicts found: create a `contradicts` or `supersedes` edge, then update or delete the conflicting entry:
+
+```bash
+mem-x graph link <new-id> <old-conflicting-id> \
+  --relation supersedes \
+  --source-layer <new-layer> --target-layer <old-layer>
+```
 
 ### Step 7 — Log
 
@@ -198,10 +222,11 @@ mem-x memory add episodic \
 
 ### Step 8 — Distill
 
-Search past evolution logs for meta-patterns:
+Search past evolution logs for meta-patterns and auto-discover related memories:
 
 ```bash
 mem-x search "evolution" --layer episodic --limit 20
+mem-x graph auto-link --threshold 0.85
 ```
 
 If a recurring pattern emerges across evolution cycles (e.g., "user always rejects class-based code"), write a meta-rule:
@@ -293,8 +318,16 @@ mem-x memory get <id> --layer <layer>
 mem-x memory delete <id> --layer <layer>
 mem-x memory purge                                       # Clean expired short-term
 
-# Search (BM25 + vector hybrid)
-mem-x search "<query>" [--layer L] [--mode bm25|vector|hybrid] [--limit N]
+# Search (BM25 + vector hybrid, optional graph expansion)
+mem-x search "<query>" [--layer L] [--mode bm25|vector|hybrid] [--limit N] [--graph]
+mem-x search "<query>" --graph --graph-depth 2 --graph-boost 0.5  # Deep graph-enhanced search
+
+# Graph (memory relationships)
+mem-x graph link <source> <target> --relation <type> --source-layer <L> --target-layer <L> [--weight N]
+mem-x graph unlink <edge-id>
+mem-x graph neighbors <memory-id> [--relation <type>]
+mem-x graph list [--relation <type>] [--layer L] [--limit N]
+mem-x graph auto-link [--threshold N] [--limit N]
 
 # Tasks
 mem-x task add --title "..." [--priority P] [--deadline D] [--tags "..."]
@@ -318,6 +351,11 @@ Session Memory ──[session end]──▶ Short-term ──[evolution]──�
   (JSON files)                     (TTL 7 rounds)              ├── Episodic (diary)
   ephemeral                        SQLite + FTS5 + vec0        ├── Semantic (knowledge)
   per-conversation                 searchable, round-decay     └── Rules (constraints)
+
+                            Graph Layer (edges table)
+                    Connects memories across all layers via typed edges:
+                    promoted_from, derived_from, related_to,
+                    contradicts, supersedes, caused_by, leads_to, similar_to
 ```
 
 | Tier | Layer | Lifespan | Analogy |
@@ -327,8 +365,10 @@ Session Memory ──[session end]──▶ Short-term ──[evolution]──�
 | 3 | Episodic | Permanent | Diary |
 | 3 | Semantic | Permanent | Notebook |
 | 3 | Rules | Permanent, highest priority | Rulebook |
+| - | Graph | Permanent | Connections between notes |
 
 - **Search priority**: Rules → Short-term → Semantic → Episodic
 - **Search modes**: BM25 (keyword) + vector (semantic) → fused via Reciprocal Rank Fusion
-- **Storage**: SQLite with FTS5 full-text index + sqlite-vec vector extension
+- **Graph-enhanced search**: `--graph` flag expands neighbors + boosts scores of connected memories
+- **Storage**: SQLite with FTS5 full-text index + sqlite-vec vector extension + edges table
 - **Bucket isolation**: Each agent gets `~/.mem-x/<bucket>/` with own DB + sessions

@@ -2,14 +2,15 @@
 
 [English](./README.md)
 
-自进化 AI 记忆系统，三级架构：**会话记忆 → 短期记忆 → 长期记忆**。双路检索（BM25 + 向量）+ 进化引擎，持续积累、提炼、纠正知识 —— 以 Agent Skill 形式交付，兼容任意 AI 助手。
+自进化 AI 记忆系统，三级架构：**会话记忆 → 短期记忆 → 长期记忆**。双路检索（BM25 + 向量）+ **图增强检索**实现关联回忆 + 进化引擎持续积累、提炼、纠正知识 —— 以 Agent Skill 形式交付，兼容任意 AI 助手。
 
 ## 特性
 
 - **三级记忆** — 会话（对话缓冲）→ 短期（按轮次 TTL 自动衰减）→ 长期（情景 / 语义 / 规则）
 - **双路检索** — BM25 关键词 + 向量语义搜索，RRF 融合排序
-- **进化引擎** — 八步工作流，将短期观察晋升为长期知识
-- **上下文引导** — `mem-x recall` 聚合规则、任务和近期记忆，支持冷启动
+- **图增强检索** — 显式边（溯源、语义、因果、冲突）+ 隐式向量相似度，实现关联回忆
+- **进化引擎** — 八步工作流，将短期观察晋升为长期知识，自动追踪图溯源
+- **上下文引导** — `mem-x recall` 聚合规则、任务、近期记忆和图边，支持冷启动
 - **多桶隔离** — 每个 Agent 通过 `--bucket` 在 `~/.mem-x/` 下获得独立数据目录
 - **调试面板** — 浏览器 UI，查看记忆统计、时间线、健康检查和搜索调试
 - **可插拔 Embedding** — 支持 OpenAI API、Ollama 及任意 OpenAI 兼容接口（如 LM Studio）
@@ -57,8 +58,17 @@ mem-x memory get <id> [--layer <layer>]
 mem-x memory delete <id> [--layer <layer>]
 mem-x memory purge                               # 清除过期短期记忆
 
-# 搜索（双路检索，优先级：rules > short_term > semantic > episodic）
+# 搜索（双路检索，可选图增强）
 mem-x search "<query>" [--layer short_term|episodic|semantic|rules] [--mode bm25|vector|hybrid] [--limit N]
+mem-x search "<query>" --graph                   # 图增强：扩展邻居 + 关联得分加权
+mem-x search "<query>" --graph --graph-depth 2   # 2 跳图扩展
+
+# 图（记忆关联关系）
+mem-x graph link <src> <tgt> --relation <type> --source-layer <L> --target-layer <L> [--weight N]
+mem-x graph unlink <edge-id>                     # 删除边
+mem-x graph neighbors <id> [--relation <type>]   # 查看关联记忆
+mem-x graph list [--relation <type>] [--layer L]  # 列出所有边
+mem-x graph auto-link [--threshold N]            # 通过向量 KNN 自动发现相似边
 
 # 任务管理
 mem-x task add --title "..." [--deadline "..."] [--priority low|medium|high|urgent]
@@ -85,14 +95,19 @@ MEM_X_BUCKET=my-agent mem-x <command>            # 或通过环境变量
 │                 (skills/mem-x/SKILL.md)                  │
 ├──────────────────────────────────────────────────────────┤
 │                       CLI 层                             │
-│  init │ session │ memory │ search │ task │ recall │ debug│
+│ init│session│memory│search│task│recall│debug│graph        │
 ├──────────────────────────────────────────────────────────┤
 │ 会话层 (JSON)       │ 短期 + 长期记忆 (SQLite)              │
 │ ~/.mem-x/<bucket>/ │ 记忆存储     │ 双路搜索                │
 │   sessions/        │ CRUD + 向量化 │ BM25 + Vector → RRF    │
+│                    │              │ + 图增强扩展              │
 ├──────────────────────────────────────────────────────────┤
-│ Embedding 提供者            │ SQLite 数据库               │
-│ OpenAI / Ollama / 自定义    │ FTS5 + sqlite-vec          │
+│ 图关联层 (edges 表)         │ SQLite 数据库               │
+│ 溯源 / 语义 / 因果          │ FTS5 + sqlite-vec          │
+│ 冲突 / 自动相似              │                           │
+├──────────────────────────────────────────────────────────┤
+│ Embedding 提供者            │                           │
+│ OpenAI / Ollama / 自定义    │                           │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -113,6 +128,10 @@ MEM_X_BUCKET=my-agent mem-x <command>            # 或通过环境变量
                                              ──▶ 语义记忆
                                              ──▶ 规则
                                              ──▶ (丢弃)
+
+图关联层 (edges) 跨层连接所有记忆节点：
+  promoted_from │ derived_from │ related_to │ contradicts
+  supersedes    │ caused_by    │ leads_to   │ similar_to
 ```
 
 ### 项目结构
@@ -125,7 +144,8 @@ src/
 │   ├── memory.ts           #   记忆 list/get/delete/purge
 │   ├── memory-add.ts       #   记忆 add（提取的子命令）
 │   ├── memory-utils.ts     #   共享 CLI 工具函数
-│   ├── search.ts           #   搜索（BM25/向量/混合）
+│   ├── search.ts           #   搜索（BM25/向量/混合/图增强）
+│   ├── graph.ts            #   图 link/unlink/neighbors/auto-link
 │   ├── task.ts             #   任务 add/list/update
 │   ├── recall.ts           #   recall（上下文引导）
 │   ├── config.ts           #   配置 show/set
@@ -149,6 +169,13 @@ src/
 │   ├── openai.ts           # OpenAI 兼容 Provider
 │   ├── ollama.ts           # Ollama Provider
 │   └── factory.ts          # Provider 工厂
+├── graph/
+│   ├── types.ts            # Edge/EdgeRelation 接口定义
+│   ├── edges.ts            # 边的 CRUD 操作
+│   ├── traverse.ts         # 图遍历（BFS、邻居查询）
+│   ├── auto-link.ts        # 跨层向量 KNN 相似度发现
+│   ├── enhance.ts          # 图增强搜索（扩展 + 加权）
+│   └── index.ts            # 桶文件（re-exports）
 ├── memory/
 │   ├── types.ts            # TypeScript 类型定义
 │   ├── session.ts          # 会话记忆（JSON 文件读写）
@@ -181,7 +208,7 @@ src/
 - **语言**: TypeScript (ESM)
 - **数据库**: SQLite (better-sqlite3) + FTS5 + sqlite-vec
 - **Embedding**: OpenAI SDK（兼容 LM Studio、Ollama 等）
-- **测试**: Vitest（137 个测试，覆盖率 90%+）
+- **测试**: Vitest（186 个测试，覆盖率 90%+）
 - **代码检查**: ESLint + typescript-eslint
 
 ## 开源协议

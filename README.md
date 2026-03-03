@@ -2,14 +2,15 @@
 
 [中文文档](./README_ZH.md)
 
-Self-evolving AI memory system with three-tier architecture: **session → short-term → long-term**. Dual-path search (BM25 + vector) and an evolution engine that continuously accumulates, distills, and corrects knowledge — delivered as an Agent Skill compatible with any AI assistant.
+Self-evolving AI memory system with three-tier architecture: **session → short-term → long-term**. Dual-path search (BM25 + vector), **graph-enhanced retrieval** for associative recall, and an evolution engine that continuously accumulates, distills, and corrects knowledge — delivered as an Agent Skill compatible with any AI assistant.
 
 ## Features
 
 - **Three-Tier Memory** — Session (conversation buffer) → Short-term (round-based TTL, auto-decay) → Long-term (episodic / semantic / rules)
 - **Dual-Path Search** — BM25 keyword + vector similarity, fused via Reciprocal Rank Fusion (RRF)
-- **Evolution Engine** — 8-step workflow promoting short-term observations into long-term knowledge
-- **Context Bootstrap** — `mem-x recall` aggregates rules, tasks, and recent memories for cold-start
+- **Graph-Enhanced Retrieval** — Explicit edges (provenance, semantic, causal, conflict) + implicit vector similarity for associative recall
+- **Evolution Engine** — 8-step workflow promoting short-term observations into long-term knowledge with graph provenance tracking
+- **Context Bootstrap** — `mem-x recall` aggregates rules, tasks, recent memories, and graph edges for cold-start
 - **Multi-Bucket Isolation** — Each agent gets an isolated data directory under `~/.mem-x/<bucket>/`
 - **Debug Dashboard** — Browser-based UI for inspecting memory stats, timeline, health, and search
 - **Pluggable Embedding** — OpenAI API, Ollama, or any OpenAI-compatible endpoint (e.g. LM Studio)
@@ -57,8 +58,17 @@ mem-x memory get <id> [--layer <layer>]
 mem-x memory delete <id> [--layer <layer>]
 mem-x memory purge                               # Remove expired short-term memories
 
-# Search (dual-path: BM25 + vector, priority: rules > short_term > semantic > episodic)
+# Search (dual-path: BM25 + vector, optional graph expansion)
 mem-x search "<query>" [--layer short_term|episodic|semantic|rules] [--mode bm25|vector|hybrid] [--limit N]
+mem-x search "<query>" --graph                   # Graph-enhanced: expand neighbors + boost connected
+mem-x search "<query>" --graph --graph-depth 2   # 2-hop graph expansion
+
+# Graph (memory relationships)
+mem-x graph link <src> <tgt> --relation <type> --source-layer <L> --target-layer <L> [--weight N]
+mem-x graph unlink <edge-id>                     # Remove an edge
+mem-x graph neighbors <id> [--relation <type>]   # List connected memories
+mem-x graph list [--relation <type>] [--layer L]  # List all edges
+mem-x graph auto-link [--threshold N]            # Auto-discover similar_to edges via vector KNN
 
 # Tasks
 mem-x task add --title "..." [--deadline "..."] [--priority low|medium|high|urgent]
@@ -85,14 +95,19 @@ MEM_X_BUCKET=my-agent mem-x <command>            # Or via environment variable
 │                 (skills/mem-x/SKILL.md)                  │
 ├──────────────────────────────────────────────────────────┤
 │                       CLI Layer                          │
-│  init │ session │ memory │ search │ task │ recall │ debug│
+│ init│session│memory│search│task│recall│debug│graph        │
 ├──────────────────────────────────────────────────────────┤
 │ Session (JSON)  │ Short-term + Long-term (SQLite)        │
 │ ~/.mem-x/       │ Memory Store │ Dual-Path Search        │
 │  <bucket>/      │ CRUD + embed │ BM25 + Vector → RRF     │
+│                 │              │ + Graph Expansion         │
 ├──────────────────────────────────────────────────────────┤
-│ Embedding Providers           │ SQLite Database           │
-│ OpenAI / Ollama / Custom      │ FTS5 + sqlite-vec         │
+│ Graph Layer (edges table)     │ SQLite Database           │
+│ Provenance / Semantic / Causal│ FTS5 + sqlite-vec         │
+│ Conflict / Auto-similar       │                           │
+├──────────────────────────────────────────────────────────┤
+│ Embedding Providers           │                           │
+│ OpenAI / Ollama / Custom      │                           │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -113,6 +128,10 @@ Session entries ──[session end]──▶ Short-term ──[evolution]──�
                                                            ──▶ Semantic
                                                            ──▶ Rules
                                                            ──▶ (discard)
+
+Graph Layer (edges) connects memories across all layers:
+  promoted_from │ derived_from │ related_to │ contradicts
+  supersedes    │ caused_by    │ leads_to   │ similar_to
 ```
 
 ### Project Structure
@@ -125,7 +144,8 @@ src/
 │   ├── memory.ts           #   memory list/get/delete/purge
 │   ├── memory-add.ts       #   memory add (extracted subcommand)
 │   ├── memory-utils.ts     #   Shared CLI helpers
-│   ├── search.ts           #   search (BM25/vector/hybrid)
+│   ├── search.ts           #   search (BM25/vector/hybrid/graph)
+│   ├── graph.ts            #   graph link/unlink/neighbors/auto-link
 │   ├── task.ts             #   task add/list/update
 │   ├── recall.ts           #   recall (context bootstrap)
 │   ├── config.ts           #   config show/set
@@ -149,6 +169,13 @@ src/
 │   ├── openai.ts           # OpenAI-compatible provider
 │   ├── ollama.ts           # Ollama provider
 │   └── factory.ts          # Provider factory
+├── graph/
+│   ├── types.ts            # Edge/EdgeRelation interfaces
+│   ├── edges.ts            # Edge CRUD operations
+│   ├── traverse.ts         # Graph traversal (BFS, neighbors)
+│   ├── auto-link.ts        # Cross-layer vector KNN similarity
+│   ├── enhance.ts          # Graph-enhanced search (expand + boost)
+│   └── index.ts            # Barrel re-exports
 ├── memory/
 │   ├── types.ts            # TypeScript interfaces
 │   ├── session.ts          # Session memory (JSON file I/O)
@@ -181,7 +208,7 @@ A Chinese version is available at `skills/mem-x/SKILL_ZH.md`.
 - **Language**: TypeScript (ESM)
 - **Database**: SQLite (better-sqlite3) + FTS5 + sqlite-vec
 - **Embedding**: OpenAI SDK (compatible with LM Studio, Ollama, etc.)
-- **Testing**: Vitest (137 tests, 90%+ coverage)
+- **Testing**: Vitest (186 tests, 90%+ coverage)
 - **Linting**: ESLint + typescript-eslint
 
 ## License

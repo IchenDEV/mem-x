@@ -31,7 +31,7 @@ const FTS_OPERATORS = new Set(["AND", "OR", "NOT"]);
 
 export function prepareFtsQuery(query: string): string | null {
   const terms = query
-    .split(/\s+/)
+    .split(/[\s\-_.,;:!?]+/)
     .filter((t) => t.length >= 3 && !FTS_OPERATORS.has(t.toUpperCase()));
   if (terms.length === 0) return null;
   return terms.join(" AND ");
@@ -139,7 +139,7 @@ export async function search(
   query: string,
   options: SearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { layer, mode = "hybrid", limit = 10 } = options;
+  const { layer, mode = "hybrid", limit = 10, graphExpand, graphDepth, graphBoost } = options;
   const layers = layer ? [layer] : SEARCH_LAYERS;
 
   let embeddingBuf: Buffer | null = null;
@@ -160,5 +160,16 @@ export async function search(
   }
 
   allResults.sort((a, b) => b.score - a.score);
-  return allResults.slice(0, limit);
+  let results = allResults.slice(0, limit);
+
+  if (graphExpand) {
+    const { graphEnhanceResults } = await import("../graph/enhance.js");
+    results = graphEnhanceResults(results, {
+      depth: graphDepth,
+      boost: graphBoost,
+      limit,
+    });
+  }
+
+  return results;
 }

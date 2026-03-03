@@ -83,6 +83,21 @@ CREATE TABLE IF NOT EXISTS evolution_log (
   changes TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS edges (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  source_layer TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_layer TEXT NOT NULL,
+  relation TEXT NOT NULL,
+  weight REAL DEFAULT 1.0,
+  metadata TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_edges_relation ON edges(relation);
 `;
 
 export function createDataTables(db: Database.Database): void {

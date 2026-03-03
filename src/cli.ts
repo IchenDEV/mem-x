@@ -10,6 +10,7 @@ import { configCommand } from "./cli/config.js";
 import { sessionCommand } from "./cli/session.js";
 import { debugCommand } from "./cli/debug.js";
 import { recallCommand } from "./cli/recall.js";
+import { graphCommand } from "./cli/graph.js";
 
 const program = new Command()
   .name("mem-x")
@@ -32,6 +33,7 @@ program.addCommand(taskCommand);
 program.addCommand(configCommand);
 program.addCommand(debugCommand);
 program.addCommand(recallCommand);
+program.addCommand(graphCommand);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err.message);

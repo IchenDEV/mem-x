@@ -31,6 +31,7 @@ import { addShortTerm } from "../src/memory/layers/short-term.js";
 import { addSemantic } from "../src/memory/layers/semantic.js";
 import { addEpisodic } from "../src/memory/layers/episodic.js";
 import { recall, formatRecall } from "../src/memory/recall.js";
+import { addEdge } from "../src/graph/edges.js";
 
 let testDir: string;
 
@@ -53,6 +54,7 @@ describe("recall", () => {
     expect(ctx.short_term).toEqual([]);
     expect(ctx.semantic).toEqual([]);
     expect(ctx.episodic).toEqual([]);
+    expect(ctx.edges).toEqual([]);
   });
 
   it("aggregates all layers", async () => {
@@ -144,5 +146,26 @@ describe("formatRecall", () => {
     expect(output).not.toContain("## Recent");
     expect(output).not.toContain("## Knowledge");
     expect(output).not.toContain("## Events");
+    expect(output).not.toContain("## Graph");
+  });
+
+  it("formats graph section when edges exist", async () => {
+    const sem = await addSemantic({ topic: "TS", content: "typed JS" });
+    const ep = await addEpisodic({ event: "learned TS" });
+    addEdge({
+      source_id: sem.id,
+      source_layer: "semantic",
+      target_id: ep.id,
+      target_layer: "episodic",
+      relation: "related_to",
+    });
+
+    const ctx = recall();
+    const output = formatRecall(ctx);
+
+    expect(output).toContain("## Graph (1 edges)");
+    expect(output).toContain("--[related_to]-->");
+    expect(output).toContain("(semantic)");
+    expect(output).toContain("(episodic)");
   });
 });

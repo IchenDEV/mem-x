@@ -89,6 +89,11 @@ describe("prepareFtsQuery", () => {
   it("handles Chinese text", () => {
     expect(prepareFtsQuery("函数式编程 TypeScript")).toBe("函数式编程 AND TypeScript");
   });
+
+  it("splits on hyphens and punctuation", () => {
+    expect(prepareFtsQuery("evolution-cycle")).toBe("evolution AND cycle");
+    expect(prepareFtsQuery("hello_world.test")).toBe("hello AND world AND test");
+  });
 });
 
 describe("BM25 Chinese support (trigram)", () => {

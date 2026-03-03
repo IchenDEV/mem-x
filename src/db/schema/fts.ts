@@ -4,7 +4,7 @@ const LAYERS = ["short_term", "episodic", "semantic", "rules"] as const;
 
 const FTS_COLUMNS: Record<string, string> = {
   short_term: "content, tags",
-  episodic: "event, result, tags",
+  episodic: "event, context, result, tags",
   semantic: "topic, content, tags",
   rules: "trigger_condition, constraint_text, reason",
 };

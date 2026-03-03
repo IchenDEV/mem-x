@@ -105,4 +105,7 @@ export interface SearchOptions {
   layer?: MemoryLayer;
   mode?: "bm25" | "vector" | "hybrid";
   limit?: number;
+  graphExpand?: boolean;
+  graphDepth?: number;
+  graphBoost?: number;
 }
