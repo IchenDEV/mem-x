@@ -3,11 +3,12 @@ import { getEmbeddingProvider } from "../embedding/factory.js";
 import { hydrateRow } from "./helpers.js";
 import {
   SEARCH_LAYERS,
-  RRF_K,
+  DEFAULT_RRF_K,
   type MemoryLayer,
   type SearchResult,
   type SearchOptions,
   type AnyMemory,
+  type SearchConfig,
 } from "./types.js";
 
 function bumpHitCount(layer: MemoryLayer, ids: string[]): void {
@@ -72,13 +73,18 @@ export function searchVec(
 export function mergeRRF(
   bm25Results: { id: string }[],
   vecResults: { id: string }[],
+  config?: SearchConfig,
 ): Map<string, number> {
+  const k = config?.rrfK ?? DEFAULT_RRF_K;
+  const bm25Weight = config?.bm25Weight ?? 1.0;
+  const vecWeight = config?.vecWeight ?? 1.0;
+
   const scores = new Map<string, number>();
   bm25Results.forEach(({ id }, i) => {
-    scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + i + 1));
+    scores.set(id, (scores.get(id) ?? 0) + bm25Weight / (k + i + 1));
   });
   vecResults.forEach(({ id }, i) => {
-    scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + i + 1));
+    scores.set(id, (scores.get(id) ?? 0) + vecWeight / (k + i + 1));
   });
   return scores;
 }
@@ -110,11 +116,11 @@ function searchLayer(
 
   if (mode === "bm25") {
     const bm25 = searchBM25(layer, query, limit);
-    scoredIds = new Map(bm25.map(({ id }, i) => [id, 1 / (RRF_K + i + 1)]));
+    scoredIds = new Map(bm25.map(({ id }, i) => [id, 1 / (DEFAULT_RRF_K + i + 1)]));
   } else if (mode === "vector") {
     if (!embeddingBuf) return [];
     const vec = searchVec(layer, embeddingBuf, limit);
-    scoredIds = new Map(vec.map(({ id }, i) => [id, 1 / (RRF_K + i + 1)]));
+    scoredIds = new Map(vec.map(({ id }, i) => [id, 1 / (DEFAULT_RRF_K + i + 1)]));
   } else {
     const bm25 = searchBM25(layer, query, limit * 2);
     const vec = embeddingBuf ? searchVec(layer, embeddingBuf, limit * 2) : [];

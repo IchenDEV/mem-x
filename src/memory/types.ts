@@ -7,7 +7,17 @@ export const SEARCH_LAYERS: MemoryLayer[] = ["rules", "short_term", "semantic", 
 
 export const ALL_LAYERS: MemoryLayer[] = ["short_term", "episodic", "semantic", "rules"];
 
-export const RRF_K = 60;
+export const DEFAULT_RRF_K = 60;
+
+/** Search configuration for RRF fusion */
+export interface SearchConfig {
+  /** RRF k parameter (default: 60) */
+  rrfK?: number;
+  /** BM25 weight in fusion (default: 1.0) */
+  bm25Weight?: number;
+  /** Vector weight in fusion (default: 1.0) */
+  vecWeight?: number;
+}
 
 export interface ShortTermMemory {
   id: string;

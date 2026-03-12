@@ -1,6 +1,6 @@
 import { getEmbeddingProvider } from "../embedding/factory.js";
 import { searchBM25, searchVec, fetchRows } from "../memory/search.js";
-import { SEARCH_LAYERS, RRF_K, type MemoryLayer, type AnyMemory } from "../memory/types.js";
+import { SEARCH_LAYERS, DEFAULT_RRF_K, type MemoryLayer, type AnyMemory } from "../memory/types.js";
 
 export interface DebugSearchResult {
   id: string;
@@ -44,14 +44,14 @@ export async function debugSearch(
   const scores = new Map<string, { layer: MemoryLayer; bm25: number | null; vec: number | null; rrf: number }>();
 
   bm25Raw.forEach(({ id, layer: l, rank }, i) => {
-    const rrf = 1 / (RRF_K + i + 1);
+    const rrf = 1 / (DEFAULT_RRF_K + i + 1);
     const existing = scores.get(id);
     if (existing) { existing.bm25 = rank; existing.rrf += rrf; }
     else scores.set(id, { layer: l, bm25: rank, vec: null, rrf });
   });
 
   vecRaw.forEach(({ id, layer: l, distance }, i) => {
-    const rrf = 1 / (RRF_K + i + 1);
+    const rrf = 1 / (DEFAULT_RRF_K + i + 1);
     const existing = scores.get(id);
     if (existing) { existing.vec = distance; existing.rrf += rrf; }
     else scores.set(id, { layer: l, bm25: null, vec: distance, rrf });

@@ -36,13 +36,20 @@ export interface ExpandedNode {
 /**
  * BFS expansion from a set of seed node IDs up to `depth` hops.
  * Returns all discovered neighbor nodes (excluding seeds themselves).
+ * 
+ * Security limits:
+ * - Maximum depth is capped at 3 to prevent deep traversal attacks
+ * - Maximum nodes is capped at 1000 to prevent memory exhaustion
  */
 export function expandNeighborhood(
   seedIds: string[],
   opts?: { depth?: number; relation?: EdgeRelation; maxNodes?: number },
 ): ExpandedNode[] {
-  const depth = opts?.depth ?? 1;
-  const maxNodes = opts?.maxNodes ?? 50;
+  // 🔒 Hard limit max depth to 3 to prevent deep traversal attacks
+  const depth = Math.min(opts?.depth ?? 1, 3);
+  // 🔒 Hard limit max nodes to 1000 to prevent memory exhaustion
+  const maxNodes = Math.min(opts?.maxNodes ?? 50, 1000);
+  
   const visited = new Set<string>(seedIds);
   const result: ExpandedNode[] = [];
 
